@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.class
@@ -40,5 +40,11 @@ uploads/
 # Vector DB
 qdrant_storage/
 
+# SQLite
+*.db
+
 # Logs
 *.log
+# Build artifacts
+*.egg-info/
+*.egg
