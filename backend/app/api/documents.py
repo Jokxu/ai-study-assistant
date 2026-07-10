@@ -23,6 +23,7 @@ async def upload_document(
     course_id: int,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     ext = Path(file.filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -34,34 +35,33 @@ async def upload_document(
     saved_path = upload_dir / saved_name
     content = await file.read()
     saved_path.write_bytes(content)
-    async with async_session() as db:
-        course_result = await db.execute(
-            select(Course).where(Course.id == course_id, Course.user_id == current_user.id)
-        )
-        course = course_result.scalar_one_or_none()
-        if not course:
-            saved_path.unlink(missing_ok=True)
-            raise HTTPException(status_code=404, detail="Course not found")
-        doc = DocModel(
-            course_id=course_id,
-            filename=saved_name,
-            original_filename=file.filename,
-            file_type=ext[1:],
-            file_size=len(content),
-            status="processing",
-        )
-        db.add(doc)
-        await db.commit()
-        await db.refresh(doc)
-        try:
-            await process_document(doc, saved_path)
-            doc.status = "ready"
-        except Exception as e:
-            doc.status = "error"
-            print(f"Document processing error: {e}")
-        await db.commit()
-        await db.refresh(doc)
-        return doc
+    course_result = await db.execute(
+        select(Course).where(Course.id == course_id, Course.user_id == current_user.id)
+    )
+    course = course_result.scalar_one_or_none()
+    if not course:
+        saved_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=404, detail="Course not found")
+    doc = DocModel(
+        course_id=course_id,
+        filename=saved_name,
+        original_filename=file.filename,
+        file_type=ext[1:],
+        file_size=len(content),
+        status="processing",
+    )
+    db.add(doc)
+    await db.commit()
+    await db.refresh(doc)
+    try:
+        await process_document(doc, saved_path)
+        doc.status = "ready"
+    except Exception as e:
+        doc.status = "error"
+        print(f"Document processing error: {e}")
+    await db.commit()
+    await db.refresh(doc)
+    return doc
 
 
 @router.get("/course/{course_id}", response_model=list[DocumentResponse])
