@@ -11,26 +11,29 @@ CHUNK_OVERLAP = 100
 
 
 def split_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
-    """Split text into chunks with overlap"""
+    if not text.strip():
+        return []
     chunks = []
     start = 0
     text_len = len(text)
 
     while start < text_len:
+        if start < 0:
+            start = 0
         end = min(start + chunk_size, text_len)
-
-        # Try to break at a sentence boundary
         if end < text_len:
             last_period = text.rfind(".", start, end)
             if last_period > start + chunk_size // 2:
                 end = last_period + 1
-
-        chunks.append(text[start:end].strip())
-        start = end - overlap
+        chunk = text[start:end].strip()
+        if chunk:
+            chunks.append(chunk)
+        next_start = end - overlap
+        if next_start <= start:
+            next_start = end
+        start = next_start
 
     return [c for c in chunks if len(c) > 20]
-
-
 def parse_text(content: str) -> str:
     """Clean and normalize text content"""
     content = re.sub(r"\s+", " ", content)
