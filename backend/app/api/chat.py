@@ -24,7 +24,6 @@ router = APIRouter(prefix="/api/chats", tags=["chats"])
 @router.get("/course/{course_id}", response_model=list[ChatSessionResponse])
 async def list_sessions(
     course_id: int,
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -38,7 +37,6 @@ async def list_sessions(
 @router.post("", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(
     data: ChatSessionCreate,
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     session = ChatSession(course_id=data.course_id, title=data.title)
@@ -51,7 +49,6 @@ async def create_session(
 @router.get("/{session_id}/messages", response_model=list[ChatMessageResponse])
 async def list_messages(
     session_id: int,
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -66,7 +63,6 @@ async def list_messages(
 async def send_message(
     session_id: int,
     data: ChatRequest,
-    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     # Get session
