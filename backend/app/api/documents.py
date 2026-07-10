@@ -62,6 +62,10 @@ async def upload_document(
         doc.status = "ready"
     except Exception as e:
         doc.status = "error"
+        import traceback, sys
+        with open(r"D:\AI Study Assistant\backend\upload_error.log", "w") as f:
+            traceback.print_exc(file=f)
+            f.write(f"\nMSG: {e}")
         print(f"Processing error: {e}")
     await db.commit()
     await db.refresh(doc)

@@ -105,12 +105,16 @@ class InMemoryStore:
 
     def __init__(self):
         self.chunks: dict[int, list[dict]] = {}
+        self.doc_courses: dict[int, int] = {}
+        self.doc_courses: dict[int, int] = {}
 
-    def add_chunks(self, doc_id: int, chunks: list[str]) -> None:
+    def add_chunks(self, doc_id: int, chunks: list[str], course_id: int = 0) -> None:
         self.chunks[doc_id] = [
             {"id": i, "doc_id": doc_id, "text": chunk}
             for i, chunk in enumerate(chunks)
         ]
+        if course_id:
+            self.doc_courses[doc_id] = course_id
 
     def search(self, query: str, top_k: int = 5) -> list[dict]:
         """Simple keyword-based search"""
@@ -126,13 +130,6 @@ class InMemoryStore:
 
         results.sort(key=lambda x: x[0], reverse=True)
         return [r[1] for r in results[:top_k]]
-
-    def get_course_chunks(self, course_id: int, limit: int = 10) -> list[dict]:
-        doc_ids = [d for d, c in self.doc_courses.items() if c == course_id]
-        all_chunks = []
-        for doc_id in doc_ids:
-            all_chunks.extend(self.chunks.get(doc_id, []))
-        return all_chunks[:limit]
 
     def get_course_chunks(self, course_id: int, limit: int = 10) -> list[dict]:
         doc_ids = [d for d, c in self.doc_courses.items() if c == course_id]
@@ -161,14 +158,12 @@ async def process_document(doc: DocModel, file_path: Path) -> list[str]:
 
 
 async def retrieve_context(query: str, course_id: int, top_k: int = 5) -> str:
-    """Retrieve relevant context for a query"""
     results = store.search(query, top_k=top_k)
-
+    if not results:
+        results = store.get_course_chunks(course_id, limit=top_k)
     if not results:
         return ""
-
-    context_parts = []
+    parts = []
     for i, chunk in enumerate(results, 1):
-        context_parts.append(f"[{i}] {chunk['text']}")
-
-    return "\n\n".join(context_parts)
+        parts.append(f"[{i}] {chunk[text]}")
+    return "\n".join(parts)
