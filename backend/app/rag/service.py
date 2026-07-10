@@ -134,6 +134,13 @@ class InMemoryStore:
             all_chunks.extend(self.chunks.get(doc_id, []))
         return all_chunks[:limit]
 
+    def get_course_chunks(self, course_id: int, limit: int = 10) -> list[dict]:
+        doc_ids = [d for d, c in self.doc_courses.items() if c == course_id]
+        all_chunks = []
+        for doc_id in doc_ids:
+            all_chunks.extend(self.chunks.get(doc_id, []))
+        return all_chunks[:limit]
+
     def remove_document(self, doc_id: int) -> None:
         self.chunks.pop(doc_id, None)
         self.doc_courses.pop(doc_id, None)

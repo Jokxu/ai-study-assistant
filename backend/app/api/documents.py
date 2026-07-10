@@ -20,34 +20,7 @@ router = APIRouter(prefix="/api/documents", tags=["documents"])
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".pptx", ".txt", ".md"}
 
 
-async def _process_background(doc_id: int, file_path) -> None:
-    """Process document in background."""
-    from app.database import async_session
-    try:
-        async with async_session() as db:
-            from app.rag.service import process_document
-            from app.models.document import Document as DM
-            from sqlalchemy import select
-            r = await db.execute(select(DM).where(DM.id == doc_id))
-            d = r.scalar_one_or_none()
-            if not d:
-                return
-            await process_document(d, file_path)
-            d.status = "ready"
-            await db.commit()
-    except Exception as e:
-        print(f"BG error: {e}")
-        try:
-            async with async_session() as db:
-                from app.models.document import Document as DM
-                from sqlalchemy import select
-                r = await db.execute(select(DM).where(DM.id == doc_id))
-                d = r.scalar_one_or_none()
-                if d:
-                    d.status = "error"
-                    await db.commit()
-        except:
-            pass
+
 
 @router.post("/upload/{course_id}", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
@@ -84,8 +57,14 @@ async def upload_document(
     db.add(doc)
     await db.commit()
     await db.refresh(doc)
-    import asyncio
-    asyncio.create_task(_process_background(doc.id, saved_path))
+    try:
+        await process_document(doc, saved_path)
+        doc.status = "ready"
+    except Exception as e:
+        doc.status = "error"
+        print(f"Processing error: {e}")
+    await db.commit()
+    await db.refresh(doc)
     return doc
 
 
