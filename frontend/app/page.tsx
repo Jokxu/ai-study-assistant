@@ -1,17 +1,20 @@
-import { BookOpen } from "lucide-react";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuthStore } from "@/lib/store";
 
 export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      <div className="flex flex-col items-center gap-4">
-        <BookOpen className="h-16 w-16 text-blue-500" />
-        <h1 className="text-3xl font-bold tracking-tight">
-          AI Study Assistant
-        </h1>
-        <p className="text-center text-gray-500 max-w-md">
-          AI 智能备考助手
-        </p>
-      </div>
-    </main>
-  );
+  const router = useRouter();
+  const token = useAuthStore((s) => s.token);
+
+  useEffect(() => {
+    if (token) {
+      router.push("/dashboard");
+    } else {
+      router.push("/login");
+    }
+  }, [token, router]);
+
+  return null;
 }
