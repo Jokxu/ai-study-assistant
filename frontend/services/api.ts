@@ -1,4 +1,4 @@
-const API_BASE = "";
+﻿const API_BASE = "";
 
 function getToken(): string {
   if (typeof window === "undefined") return "";
@@ -65,7 +65,7 @@ export const courseApi = {
     request<Course>("/api/courses", { method: "POST", body: JSON.stringify(data) }),
   update: (id: number, data: { name: string; description?: string; color?: string }) =>
     request<Course>("/api/courses/" + id, { method: "PUT", body: JSON.stringify(data) }),
-  delete: (id: number) => request<void>("/api/courses/" + id, { method: "DELETE" }),
+  "delete": (id: number) => request<void>("/api/courses/" + id, { method: "DELETE" }),
 };
 
 // ===== Documents =====
@@ -88,8 +88,9 @@ export const documentApi = {
     }).then(async (r) => {
       if (!r.ok) throw new Error((await r.json().catch(() => ({ detail: "Upload failed" }))).detail);
       return r.json();
-    }),
-  delete: (docId: number) => request<void>("/api/documents/" + docId, { method: "DELETE" }),
+    });
+  },
+  "delete": (docId: number) => request<void>("/api/documents/" + docId, { method: "DELETE" }),
 };
 
 // ===== Chat =====
@@ -225,7 +226,9 @@ export const wrongQuestionApi = {
   list: (courseId: number) => request<WrongQuestion[]>("/api/wrong-questions/course/" + courseId),
   create: (data: { course_id: number; question: string; user_answer: string; correct_answer?: string; feedback?: string; tags?: string }) =>
     request<WrongQuestion>("/api/wrong-questions", { method: "POST", body: JSON.stringify(data) }),
-  delete: (id: number) => request<void>("/api/wrong-questions/" + id, { method: "DELETE" }),
+  "delete": (id: number) => request<void>("/api/wrong-questions/" + id, { method: "DELETE" }),
 };
+
+
 
 

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/lib/store";
 import { courseApi, documentApi, aiToolsApi, type Course, type Document } from "@/services/api";
 
-type ToolType = "summary" | "quiz" | "explain" | "roadmap" | null;
+type ToolType = "summary" | "quiz" | "explain" | "roadmap" | "grade" | null;
 
 export default function CourseDetailPage() {
   const router = useRouter();
@@ -36,6 +36,9 @@ export default function CourseDetailPage() {
   const [quizTopics, setQuizTopics] = useState("");
   const [explainInput, setExplainInput] = useState("");
   const [roadmapGoal, setRoadmapGoal] = useState("");
+const [gradeQuestion, setGradeQuestion] = useState("");
+const [gradeAnswer, setGradeAnswer] = useState("");
+const [gradeCorrect, setGradeCorrect] = useState("");
   
 
   const loadData = useCallback(async () => {
@@ -100,8 +103,11 @@ export default function CourseDetailPage() {
         case "roadmap":
           res = await aiToolsApi.roadmap(courseId, roadmapGoal || undefined);
           break;
+        default:
+          res = null;
+          break;
       }
-      setAiResult(res.content);
+      setAiResult(res?.content ?? "");
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "AI 请求失败");
     }
