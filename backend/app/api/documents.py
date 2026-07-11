@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.logging_config import logger
 from app.database import get_db, async_session
 from app.models.document import Document as DocModel
 from app.models.course import Course
@@ -32,11 +33,17 @@ async def upload_document(
     ext = Path(file.filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+    await file.seek(0)
+    content = await file.read()
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    if len(content) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"File too large ({len(content)/1024/1024:.0f} MB). Max: {settings.max_upload_size_mb} MB")
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_id = str(uuid.uuid4())
     saved_name = f"{file_id}{ext}"
     saved_path = upload_dir / saved_name
+    await file.seek(0)
     content = await file.read()
     saved_path.write_bytes(content)
     course_result = await db.execute(
@@ -101,3 +108,5 @@ async def delete_document(
         file_path.unlink()
     await db.delete(doc)
     await db.commit()
+
+

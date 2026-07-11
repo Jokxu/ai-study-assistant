@@ -1,4 +1,4 @@
-# AI Study Assistant Backend
+﻿# AI Study Assistant Backend
 
 [project]
 name = "ai-study-assistant-backend"
@@ -16,10 +16,10 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "python-multipart>=0.0.18",
     "httpx>=0.28.0",
-    "aiosqlite>=0.20.0",
+    "aiosqlite>=0.20.0",\n    "asyncpg>=0.31.0",
     "qdrant-client>=1.13.0",
     "langchain-core>=0.3.0",
-    "pypdf2>=3.0.0",
+    "pypdf>=5.0.0",
     "python-pptx>=1.0.0",
     "python-docx>=1.1.0",
 ]
@@ -43,3 +43,4 @@ select = ["E", "F", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+

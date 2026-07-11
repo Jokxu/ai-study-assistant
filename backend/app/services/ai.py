@@ -70,3 +70,40 @@ async def ask(
     """Simple wrapper: send messages and get text response"""
     result = await chat_completion(messages, model=model)
     return result["choices"][0]["message"]["content"]
+async def chat_completion_stream(
+    messages: list[dict],
+    model: Optional[str] = None,
+    temperature: float = 0.7,
+) -> AsyncGenerator[str, None]:
+    """Stream DeepSeek chat completion (SSE), yielding content tokens."""
+    headers = {
+        "Authorization": f"Bearer {settings.deepseek_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model or settings.deepseek_model,
+        "messages": messages,
+        "temperature": temperature,
+        "stream": True,
+    }
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        async with client.stream(
+            "POST",
+            f"{settings.deepseek_api_base}/chat/completions",
+            headers=headers,
+            json=payload,
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data = line[6:]
+                if data.strip() == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                    delta = chunk["choices"][0]["delta"]
+                    if "content" in delta:
+                        yield delta["content"]
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue

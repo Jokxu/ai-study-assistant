@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
+"""RAG service: document parsing, chunking, and retrieval.
+Supports both InMemoryStore (default) and Qdrant vector store (when available).
+"""
 import re
 from pathlib import Path
 from typing import Optional
 
 from app.config import settings
+from app.logging_config import logger
 from app.models.document import Document as DocModel
 
 CHUNK_SIZE = 500
@@ -34,6 +38,8 @@ def split_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
         start = next_start
 
     return [c for c in chunks if len(c) > 20]
+
+
 def parse_text(content: str) -> str:
     """Clean and normalize text content"""
     content = re.sub(r"\s+", " ", content)
@@ -41,10 +47,8 @@ def parse_text(content: str) -> str:
 
 
 def parse_pdf(file_path: Path) -> str:
-    """Extract text from PDF"""
     try:
         from PyPDF2 import PdfReader
-
         reader = PdfReader(str(file_path))
         text = []
         for page in reader.pages:
@@ -57,10 +61,8 @@ def parse_pdf(file_path: Path) -> str:
 
 
 def parse_docx(file_path: Path) -> str:
-    """Extract text from DOCX"""
     try:
         from docx import Document
-
         doc = Document(str(file_path))
         return "\n".join(p.text for p in doc.paragraphs)
     except ImportError:
@@ -68,10 +70,8 @@ def parse_docx(file_path: Path) -> str:
 
 
 def parse_pptx(file_path: Path) -> str:
-    """Extract text from PPTX"""
     try:
         from pptx import Presentation
-
         prs = Presentation(str(file_path))
         text = []
         for slide in prs.slides:
@@ -84,7 +84,6 @@ def parse_pptx(file_path: Path) -> str:
 
 
 def parse_document(file_path: Path, file_type: str) -> str:
-    """Parse document based on file type"""
     parsers = {
         "pdf": parse_pdf,
         "docx": parse_docx,
@@ -92,20 +91,19 @@ def parse_document(file_path: Path, file_type: str) -> str:
         "txt": lambda p: p.read_text(encoding="utf-8", errors="replace"),
         "md": lambda p: p.read_text(encoding="utf-8", errors="replace"),
     }
-
     parser = parsers.get(file_type)
     if not parser:
         raise ValueError(f"Unsupported file type: {file_type}")
-
     return parser(file_path)
 
 
+# ===== InMemoryStore (fallback) =====
+
 class InMemoryStore:
-    """Simple in-memory chunk storage for demo purposes"""
+    """Simple in-memory chunk storage for when Qdrant is unavailable."""
 
     def __init__(self):
         self.chunks: dict[int, list[dict]] = {}
-        self.doc_courses: dict[int, int] = {}
         self.doc_courses: dict[int, int] = {}
 
     def add_chunks(self, doc_id: int, chunks: list[str], course_id: int = 0) -> None:
@@ -117,17 +115,14 @@ class InMemoryStore:
             self.doc_courses[doc_id] = course_id
 
     def search(self, query: str, top_k: int = 5) -> list[dict]:
-        """Simple keyword-based search"""
         query_terms = set(query.lower().split())
         results = []
-
         for doc_id, chunks in self.chunks.items():
             for chunk in chunks:
                 chunk_terms = set(chunk["text"].lower().split())
                 overlap = len(query_terms & chunk_terms)
                 if overlap > 0:
                     results.append((overlap, chunk))
-
         results.sort(key=lambda x: x[0], reverse=True)
         return [r[1] for r in results[:top_k]]
 
@@ -143,27 +138,73 @@ class InMemoryStore:
         self.doc_courses.pop(doc_id, None)
 
 
-# Global in-memory store (will be replaced with Qdrant later)
+# Global stores
 store = InMemoryStore()
+_use_qdrant = False
+
+
+async def init_stores():
+    """Try to initialize Qdrant; fall back to InMemoryStore."""
+    global _use_qdrant
+    try:
+        from app.rag import qdrant_store as qs
+        from app.rag.embedding import get_embedding_dim
+
+        from app.rag.embedding import enable_semantic_embedding
+        await enable_semantic_embedding()
+        if await qs.is_available():
+            dim = await get_embedding_dim()
+            await qs.ensure_collection(dim=dim)
+            _use_qdrant = True
+            logger.info(f"Qdrant ready (dim={dim})")
+        else:
+            logger.info("Qdrant not available, using InMemoryStore")
+    except Exception as e:
+        logger.warning(f"Qdrant init failed (see detail): {e}")
+        import traceback
+        for line in traceback.format_exc().split(chr(10)):
+            if line.strip():
+                logger.error(f"  {line}")
 
 
 async def process_document(doc: DocModel, file_path: Path) -> list[str]:
-    """Process a document: parse, chunk, and store"""
+    """Process a document: parse, chunk, and store."""
     raw_text = parse_document(file_path, doc.file_type)
     clean_text = parse_text(raw_text)
     chunks = split_text(clean_text)
 
+    # Store in InMemoryStore (always)
     store.add_chunks(doc.id, chunks, course_id=doc.course_id)
+
+    # Also store in Qdrant if available
+    if _use_qdrant:
+        from app.rag import qdrant_store as qs
+        await qs.add_chunks(doc.id, chunks, doc.course_id)
+
     return chunks
 
 
 async def retrieve_context(query: str, course_id: int, top_k: int = 5) -> str:
-    results = store.search(query, top_k=top_k)
+    """Retrieve context for a query using available stores."""
+    results = []
+
+    if _use_qdrant:
+        from app.rag import qdrant_store as qs
+        results = await qs.search(query, top_k=top_k, course_id=course_id)
+
+    if not results:
+        results = store.search(query, top_k=top_k)
+
     if not results:
         results = store.get_course_chunks(course_id, limit=top_k)
+
     if not results:
         return ""
+
     parts = []
     for i, chunk in enumerate(results, 1):
-        parts.append(f"[{i}] {chunk[text]}")
-    return "\n".join(parts)
+        text = chunk.get("text", str(chunk))
+        parts.append(f"[{i}] {text}")
+    return "\n\n".join(parts)
+
+

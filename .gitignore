@@ -48,3 +48,18 @@ qdrant_storage/
 # Build artifacts
 *.egg-info/
 *.egg
+
+# Logs
+backend/logs/
+
+# Debug / fix scripts (one-off repair tools, not part of the codebase)
+fix_*.py
+test_*.py
+upload_debug*.py
+upload_test*.py
+debug_*.py
+add_state.py
+apply_fix.py
+check_qdrant.py
+patch.tmp
+seed_demo.py

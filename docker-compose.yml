@@ -1,4 +1,4 @@
-version: "3.8"
+﻿version: "3.8"
 
 services:
   postgres:
@@ -13,6 +13,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -24,6 +29,31 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-study-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/study_assistant
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      DEEPSEEK_API_KEY: 
+      DEEPSEEK_API_BASE: https://api.deepseek.com
+      SECRET_KEY: 
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   qdrant_data:
+  uploads_data:
