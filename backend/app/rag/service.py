@@ -165,6 +165,46 @@ async def init_stores():
                 logger.error(f"  {line}")
 
 
+async def _rebuild_store_from_qdrant(course_id: int) -> bool:
+    """Rebuild InMemoryStore from Qdrant data for a course."""
+    try:
+        from app.rag import qdrant_store as qs
+        from qdrant_client.http import models
+        client = qs._get_client()
+        if not client:
+            return False
+
+        offset = None
+        doc_chunks: dict[int, list[str]] = {}
+        while True:
+            result = client.scroll(
+                collection_name=qs.COLLECTION_NAME,
+                scroll_filter=models.Filter(
+                    must=[models.FieldCondition(key="course_id", match=models.MatchValue(value=course_id))]
+                ),
+                limit=100,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            points, offset = result
+            if not points:
+                break
+            for p in points:
+                doc_id = p.payload.get("doc_id")
+                text = p.payload.get("text", "")
+                if doc_id and text:
+                    doc_chunks.setdefault(doc_id, []).append(text)
+            if offset is None:
+                break
+
+        for doc_id, chunks in doc_chunks.items():
+            store.add_chunks(doc_id, chunks, course_id=course_id)
+        return len(doc_chunks) > 0
+    except Exception:
+        return False
+
+
 async def reprocess_existing_documents():
     """Re-process all ready documents to rebuild chunk stores after restart."""
     try:
@@ -228,7 +268,13 @@ async def retrieve_context(query: str, course_id: int, top_k: int = 5) -> str:
         results = store.search(query, top_k=top_k)
 
     if not results:
-        results = store.get_course_chunks(course_id, limit=top_k)
+        # Lazily rebuild InMemoryStore from Qdrant if empty
+        if not store.chunks and _use_qdrant:
+            rebuild_ok = await _rebuild_store_from_qdrant(course_id)
+            if rebuild_ok:
+                results = store.get_course_chunks(course_id, limit=top_k)
+        if not results:
+            results = store.get_course_chunks(course_id, limit=top_k)
 
     if not results:
         return ""

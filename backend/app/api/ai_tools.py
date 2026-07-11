@@ -36,6 +36,11 @@ async def _get_course(course_id: int, user: User, db: AsyncSession) -> Course:
 async def _get_course_context(course_id: int, max_chunks: int = 20) -> str:
     chunks = store.get_course_chunks(course_id, limit=max_chunks)
     if not chunks:
+        from app.rag.service import _rebuild_store_from_qdrant
+        ok = await _rebuild_store_from_qdrant(course_id)
+        if ok:
+            chunks = store.get_course_chunks(course_id, limit=max_chunks)
+    if not chunks:
         raise HTTPException(status_code=400, detail="该课程还没有上传教材，请先上传文档")
     parts = []
     for chunk in chunks:
