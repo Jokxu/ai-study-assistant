@@ -150,8 +150,6 @@ async def init_stores():
         from app.rag import qdrant_store as qs
         from app.rag.embedding import get_embedding_dim
 
-        from app.rag.embedding import enable_semantic_embedding
-        await enable_semantic_embedding()
         if await qs.is_available():
             dim = await get_embedding_dim()
             await qs.ensure_collection(dim=dim)
