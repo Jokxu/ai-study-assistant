@@ -5,13 +5,25 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import register_routers
 from app.database import init_db
-from app.rag import init_stores
+from app.rag import init_stores, reprocess_existing_documents
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     await init_stores()
+    
+    # Rebuild chunk stores in background (don't block startup)
+    import asyncio
+    async def _background_reprocess():
+        try:
+            await reprocess_existing_documents()
+        except Exception as e:
+            from app.logging_config import logger
+            logger.warning(f"Background reprocess failed: {e}")
+    
+    asyncio.create_task(_background_reprocess())
+    
     yield
 
 

@@ -165,6 +165,40 @@ async def init_stores():
                 logger.error(f"  {line}")
 
 
+async def reprocess_existing_documents():
+    """Re-process all ready documents to rebuild chunk stores after restart."""
+    try:
+        from app.database import async_session
+        from app.models.document import Document as DocModel
+        from sqlalchemy import select
+        
+        upload_dir = Path(settings.upload_dir)
+        async with async_session() as db:
+            result = await db.execute(
+                select(DocModel).where(DocModel.status == "ready", DocModel.file_size > 0)
+            )
+            docs = result.scalars().all()
+            
+        if not docs:
+            logger.info("No existing documents to reprocess")
+            return
+            
+        count = 0
+        for doc in docs:
+            file_path = upload_dir / doc.filename
+            if not file_path.exists():
+                continue
+            try:
+                await process_document(doc, file_path)
+                count += 1
+            except Exception as e:
+                logger.warning(f"Reprocess doc {doc.id} ({doc.original_filename}) failed: {e}")
+                
+        logger.info(f"Reprocessed {count}/{len(docs)} existing documents")
+    except Exception as e:
+        logger.warning(f"Document reprocess failed: {e}")
+
+
 async def process_document(doc: DocModel, file_path: Path) -> list[str]:
     """Process a document: parse, chunk, and store."""
     raw_text = parse_document(file_path, doc.file_type)

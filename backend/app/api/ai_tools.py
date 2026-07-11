@@ -63,6 +63,7 @@ class QuizRequest(BaseModel):
     prompt_extra: str = ""
     question_count: int = 5
     question_types: str = "选择题"
+    topics: str = ""
 
 
 @router.post("/quiz/{course_id}", response_model=AIActionResponse)
@@ -73,7 +74,10 @@ async def generate_quiz(
     db: AsyncSession = Depends(get_db),
 ):
     await _get_course(course_id, current_user, db)
-    context = await _get_course_context(course_id)
+    if data.topics:
+        context = await retrieve_context(data.topics, course_id, top_k=10)
+    else:
+        context = await _get_course_context(course_id)
 
     user_prompt = (
         f"请基于以上教材内容，生成 {data.question_count} 道{data.question_types}。"
@@ -92,7 +96,10 @@ async def explain_concept(
     db: AsyncSession = Depends(get_db),
 ):
     await _get_course(course_id, current_user, db)
-    context = await _get_course_context(course_id)
+    if data.prompt_extra:
+        context = await retrieve_context(data.prompt_extra, course_id, top_k=10)
+    else:
+        context = await _get_course_context(course_id)
 
     if not data.prompt_extra:
         raise HTTPException(status_code=400, detail="请输入要解释的概念或知识点")
